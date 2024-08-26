@@ -17,8 +17,6 @@ import asyncio
 import os
 from typing import List
 
-from tenacity import retry, stop_after_attempt, wait_random_exponential
-
 from .base import EmbeddingModel
 
 
@@ -26,7 +24,6 @@ def get_executor():
     from . import embeddings_executor
 
     return embeddings_executor
-
 
 class AzureEmbeddingModel(EmbeddingModel):
     """Embedding model using Azure OpenAI.
@@ -86,7 +83,6 @@ class AzureEmbeddingModel(EmbeddingModel):
         result = await loop.run_in_executor(get_executor(), self.encode, documents)
         return result
 
-    # @retry(wait=wait_random_exponential(min=1, max=20), stop=stop_after_attempt(6))
     def encode(self, documents: List[str]) -> List[List[float]]:
         """Encode a list of documents into their corresponding embeddings.
 
