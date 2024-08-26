@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import asyncio
+import os
 from typing import List
 
 from tenacity import retry, stop_after_attempt, wait_random_exponential
@@ -35,9 +36,6 @@ class AzureEmbeddingModel(EmbeddingModel):
 
     Args:
         embedding_model (str): The name of the Azure OpenAI deployment model (e.g., "text-embedding-ada-002").
-        api_base (str): The base URL for the Azure OpenAI resource.
-        api_key (str): The API key for the Azure OpenAI resource.
-        api_version (str): The version of the Azure OpenAI API to use.
     """
 
     engine_name = "AzureOpenAI"
@@ -48,22 +46,20 @@ class AzureEmbeddingModel(EmbeddingModel):
         # Add more models and their dimensions here if needed
     }
 
-    def __init__(
-        self, embedding_model: str, api_base: str, api_key: str, api_version: str
-    ):
+    def __init__(self, embedding_model: str):
         try:
-            from openai import OpenAI
+            from openai import AzureOpenAI
         except ImportError:
             raise ImportError(
                 "Could not import openai, please install it with "
                 "`pip install openai`."
             )
         # Set Azure OpenAI API credentials
-        self.client = OpenAI()
-        self.client.api_type = "azure"
-        self.client.api_base = api_base
-        self.client.api_version = api_version  # or the version you're using
-        self.client.api_key = api_key
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        )
 
         self.embedding_model = embedding_model
         self.embedding_size = self._get_embedding_dimension()
@@ -90,7 +86,7 @@ class AzureEmbeddingModel(EmbeddingModel):
         result = await loop.run_in_executor(get_executor(), self.encode, documents)
         return result
 
-    @retry(wait=wait_random_exponential(min=1, max=20), stop=stop_after_attempt(6))
+    # @retry(wait=wait_random_exponential(min=1, max=20), stop=stop_after_attempt(6))
     def encode(self, documents: List[str]) -> List[List[float]]:
         """Encode a list of documents into their corresponding embeddings.
 
@@ -104,9 +100,11 @@ class AzureEmbeddingModel(EmbeddingModel):
             RuntimeError: If the API call fails.
         """
         try:
-            response = self.client.Embedding.create(
+            print("Entering encode")
+            response = self.client.embeddings.create(
                 model=self.embedding_model, input=documents
             )
-            return [item["embedding"] for item in response["data"]]
-        except self.client.error.OpenAIError as e:
+            embeddings = [record.embedding for record in response.data]
+            return embeddings
+        except Exception as e:
             raise RuntimeError(f"Failed to retrieve embeddings: {e}")
